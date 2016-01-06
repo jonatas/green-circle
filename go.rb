@@ -70,8 +70,16 @@ end
 
 #fetch "32393"
 
-time_per_file = Performance.group(:file).average(:time)
-stdev_per_file = Performance.select("file, stddev_samp(time) as time").group(:file).inject({}){|h,performance|h[performance.file] = performance.time;h}
+def time_per_file
+  @time_per_file ||= Performance.group(:file).average(:time)
+end
+
+def stdev_per_file 
+  @stdev_per_file ||= Performance
+    .select("file, stddev_samp(time) as time")
+    .group(:file)
+    .inject({}){|h,performance|h[performance.file] = performance.time;h}
+end
 
 time_per_file.each do |file, avg_time|
   next unless stdev_per_file[file]

@@ -9,9 +9,9 @@ Allowing you to study performance per build.
 1. Create or get your key on [Circle CI api](https://circleci.com/account/api).
 2. Set as a environment variable
 
-    export CI_TOKEN=myAwesomeToken
-    export CI_REPOSITORY="rdstation"
-    export CI_USERNAME="ResultadosDigitais"
+     export CI_TOKEN=myAwesomeToken
+     export CI_REPOSITORY="rdstation"
+     export CI_USERNAME="ResultadosDigitais"
 
 3. Setup your database
  
@@ -43,12 +43,18 @@ build_nums.each{|build_num| fetch build_num }
 
 ### Average build time
 
-```
-Performance.group(:build).average("time")
+```ruby
+Performance.group(:build).average(:time)
 ```
 
 ### Average build time by container
 
+```ruby
+Performance.group(:build, :container).average(:time)
 ```
-Performance.group(:build, :container).average("time")
+
+### Standard deviation of time per file
+
+```ruby
+stdev_per_file
 ```
