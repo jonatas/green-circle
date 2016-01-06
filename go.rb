@@ -4,13 +4,15 @@ require "circleci"
 require "active_record"
 
 tkn = ENV['CI_TOKEN']
+
 CircleCi.configure do |config|
   config.token = tkn
 end
 
 $token = "?circle-token=#{tkn}"
+$username = ENV['CI_USERNAME']
+$repo = ENV['CI_REPOSITORY']
 
-$username,$repo,build = "ResultadosDigitais/rdstation/32395".split("/")
 
 def download_rspec_results_from build
   res = CircleCi::Build.artifacts $username, $repo, build
@@ -41,9 +43,6 @@ def parse_reports containers
   end
 end
 
-# create database circleci;
-# \c circleci
-#  create table performances (build integer, file varchar, time float, container integer)
 ActiveRecord::Base.establish_connection(
   adapter:    'postgresql',
   host:       'localhost',
@@ -76,12 +75,9 @@ stdev_per_file = Performance.select("file, stddev_samp(time) as time").group(:fi
 
 time_per_file.each do |file, avg_time|
   next unless stdev_per_file[file]
-  puts("time / #{avg_time} < #{stdev_per_file[file] * 3}") #melhorou 10%
   result = Performance.where(build: 32393, file: file).where("time - #{avg_time} < #{stdev_per_file[file] * 10}") #melhorou 10%
   if result.exists?
     puts "#{file} melhorou em #{ result.first.time - avg_time} < #{} segundos (#{result.first.time} -> ~#{ avg_time} ^#{stdev_per_file[file]})"
   end
 end
 
-require "pry"
-binding.pry
