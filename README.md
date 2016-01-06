@@ -9,9 +9,11 @@ Allowing you to study performance per build.
 1. Create or get your key on [Circle CI api](https://circleci.com/account/api).
 2. Set as a environment variable
 
-     export CI_TOKEN=myAwesomeToken
-     export CI_REPOSITORY="rdstation"
-     export CI_USERNAME="ResultadosDigitais"
+```
+export CI_TOKEN=myAwesomeToken
+export CI_REPOSITORY="rdstation"
+export CI_USERNAME="ResultadosDigitais"
+```
 
 3. Setup your database
  
