@@ -7,7 +7,8 @@ Allowing you to study performance per build.
 ## Setup your key
 
 1. Create or get your key on [Circle CI api](https://circleci.com/account/api).
-2. Set as a environment variable
+2. Set your environment variable on a `.env` file in the main directory of
+   these project
 
 ```
 export CI_TOKEN=myAwesomeToken
