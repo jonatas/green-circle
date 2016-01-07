@@ -2,6 +2,8 @@ require "bundler/setup"
 require "nokogiri"
 require "circleci"
 require "active_record"
+require 'dotenv'
+Dotenv.load
 
 tkn = ENV['CI_TOKEN']
 
@@ -47,7 +49,7 @@ ActiveRecord::Base.establish_connection(
   adapter:    'postgresql',
   host:       'localhost',
   database:   'circleci',
-  port:       '5432'
+  port:       '15432'
 )
 
 class Performance < ActiveRecord::Base
@@ -81,11 +83,24 @@ def stdev_per_file
     .inject({}){|h,performance|h[performance.file] = performance.time;h}
 end
 
-time_per_file.each do |file, avg_time|
-  next unless stdev_per_file[file]
-  result = Performance.where(build: 32393, file: file).where("time - #{avg_time} < #{stdev_per_file[file] * 10}") #melhorou 10%
-  if result.exists?
-    puts "#{file} melhorou em #{ result.first.time - avg_time} < #{} segundos (#{result.first.time} -> ~#{ avg_time} ^#{stdev_per_file[file]})"
+def compare_build build_num
+  time_per_file.each do |file, avg_time|
+    next unless stdev_per_file[file]
+    result = Performance.where(build: build_num, file: file).where("time - #{avg_time} < #{stdev_per_file[file] * 10}") #melhorou 10%
+    if result.exists?
+      puts "#{file} melhorou em #{ result.first.time - avg_time} < #{} segundos (#{result.first.time} -> ~#{ avg_time} ^#{stdev_per_file[file]})"
+    end
   end
 end
+
+
+builds = CircleCi::Project.recent_builds $username, $repo
+build_nums = builds
+  .body
+  .select{|e|e["status"] =~ /fixed|success/ && e["branch"] !="master"}
+  .map{|e|e["build_num"]}
+
+build_nums.each{|build_num| fetch build_num }
+require "pry"
+binding.pry
 
