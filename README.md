@@ -21,7 +21,7 @@ export CI_USERNAME="ResultadosDigitais"
 ```sql
 create database circleci;
 \c circleci
-create table performances (build integer, file varchar, time float, container integer)
+create table performances (build integer, file varchar, time float, container integer);
 ```
 
 3. Choose recent builds to analyse
