@@ -17,14 +17,23 @@ $repo = ENV['CI_REPOSITORY']
 
 
 def download_rspec_results_from build
+	begin 
   res = CircleCi::Build.artifacts $username, $repo, build
+	rescue SocketError
+		puts "Ops!!! #{$!} retry in 2 seconds..."
+		sleep 2
+		retry
+	end
   rspec_reports = res.body.inject([]){|array,e|array[e["node_index"]] = e["url"] if e["url"] =~ /rspec\/result.xml$/ ; array}
   build_folder = "builds/#{build}"
 
   `mkdir -p #{build_folder}`
 
   rspec_reports.each_with_index do |url, i|
+    next if not url
+
     destination_file = "builds/#{build}/container#{i}.xml"
+
     if !File.exists?(destination_file) || File.size(destination_file) == 0
       `curl #{url+$token} | sed 's/ classname=.* file=/ file=/' > #{destination_file}`
     end
@@ -94,13 +103,53 @@ def compare_build build_num
 end
 
 
-builds = CircleCi::Project.recent_builds $username, $repo
-build_nums = builds
-  .body
-  .select{|e|e["status"] =~ /fixed|success/ && e["branch"] !="master"}
-  .map{|e|e["build_num"]}
+def best_time
+  return @best_time if @best_time
+  @best_time = {}
+  Performance.group(:build, :container).sum(:time).each do |(build_num, container), time|
+    @best_time[build_num] ||= [] 
+    @best_time[build_num][container]  = time
+  end
+  @best_time
+end
 
-build_nums.each{|build_num| fetch build_num }
+def worse_build
+  max_time = nil
+  worse_build = nil
+  best_time.each do |build, times|
+    next if times.length < 4
+    if max_time.nil? || times.max > max_time.max
+      max_time = times
+      worse_build = build
+    end
+  end
+  {worse_build => max_time}
+end
+
+def best_build
+  max_time = nil
+  best_build = nil
+  best_time.each do |build, times|
+    if max_time.nil? || times.max < max_time.max
+      max_time = times
+      best_build = build
+    end
+  end
+  {best_build => max_time}
+end
+
+
+=begin
+(0..10).each do |i|
+	builds = CircleCi.http.get "/project/#{$username}/#{$repo}#{$token}&filter=successful&offset=#{20*i}&limit=20"
+	build_nums = builds
+		.body
+		.select{|e|e["status"] =~ /fixed|success/ && e["branch"] !="master"}
+		.map{|e|e["build_num"]}
+p build_nums
+	build_nums.each{|build_num| fetch build_num }
+end
+=end
 require "pry"
 binding.pry
 
