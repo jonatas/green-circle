@@ -88,7 +88,7 @@ end
 
 class Build < ActiveRecord::Base
 
-  scope :grouped, -> (by) { group(by).count.sort_by{|k,v|k} }
+  scope :grouped, -> (by) { group(by).count.sort_by{|k,v|k || ""} }
   scope :in, -> (trunk, value) { where("extract(? from start_time) = ?", trunk, value) }
 
   scope :per_hour, -> { grouped("extract(hour from start_time)") }
@@ -99,6 +99,9 @@ class Build < ActiveRecord::Base
   scope :contributors, -> { select("author_name").distinct.pluck("author_name").compact.sort }
   scope :total,  -> (field){ select(field).distinct.count }
   scope :total_branches, -> { total("branch") }
+
+  scope :top_contributors, -> { grouped("author_name").sort_by {|k,v|-v} }
+  scope :top_branches, -> { grouped("branch").sort_by {|k,v|-v} }
 
   scope :total_contributors, -> { 
     where("not author_name is null")
