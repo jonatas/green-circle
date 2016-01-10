@@ -63,15 +63,22 @@ ActiveRecord::Base.establish_connection(
 
 class Performance < ActiveRecord::Base
 
-end
-
-
-def persist build, spec_results
-  Performance.where(build: build).delete_all
-  spec_results.each_with_index do |results,container|
-    results.each {|file,time| Performance.create build: build, container: container, file: file, time: time }
+  def self.persist build, spec_results
+    where(build: build).delete_all
+    spec_results.each_with_index do |results,container|
+      results.each {|file,time| create build: build, container: container, file: file, time: time }
+    end
   end
 end
+
+class Build < ActiveRecord::Base
+
+  def self.save_from_json info
+    create info.slice("build_num", "author_name","queued_at","start_time", "build_time_millis","branch", "subject")
+  end
+end
+
+
 
 def fetch build
   containers = download_rspec_results_from build
@@ -103,20 +110,20 @@ def compare_build build_num
 end
 
 
-def best_time
-  return @best_time if @best_time
-  @best_time = {}
+def build_time_per_container
+  return @build_time_per_container if @build_time_per_container
+  @build_time_per_container = {}
   Performance.group(:build, :container).sum(:time).each do |(build_num, container), time|
-    @best_time[build_num] ||= [] 
-    @best_time[build_num][container]  = time
+    @build_time_per_container[build_num] ||= [] 
+    @build_time_per_container[build_num][container]  = time
   end
-  @best_time
+  @build_time_per_container
 end
 
 def worse_build
   max_time = nil
   worse_build = nil
-  best_time.each do |build, times|
+  build_time_per_container.each do |build, times|
     next if times.length < 4
     if max_time.nil? || times.max > max_time.max
       max_time = times
@@ -129,7 +136,7 @@ end
 def best_build
   max_time = nil
   best_build = nil
-  best_time.each do |build, times|
+  build_time_per_container.each do |build, times|
     if max_time.nil? || times.max < max_time.max
       max_time = times
       best_build = build
@@ -138,17 +145,22 @@ def best_build
   {best_build => max_time}
 end
 
-
-(0..10).each do |i|
-	builds = CircleCi.http.get "/project/#{$username}/#{$repo}#{$token}&filter=successful&offset=#{20*i}&limit=20"
-	build_nums = builds
-		.body
-		.select{|e|e["status"] =~ /fixed|success/ && e["branch"] !="master"}
-		.map{|e|e["build_num"]}
-p build_nums
-	build_nums.each{|build_num| fetch build_num }
+def fetch_successful_builds page=0, total_per_page=20
+	builds = CircleCi.http.get "/project/#{$username}/#{$repo}#{$token}&filter=successful&offset=#{page * total_per_page}&limit=#{total_per_page}"
+	builds
+		.body # ignoring master
 end
 
+def fetch_some_builds
+  build_nums = 
+    fetch_successful_builds
+    .select{|e|e["status"] =~ /fixed|success/ && e["branch"] !="master"}
+    .map{|e|e["build_num"]}
+
+	build_nums.each{|build_num| fetch build_num }
+end
+ 
 require "pry"
 binding.pry
+
 

@@ -22,6 +22,10 @@ export CI_USERNAME="ResultadosDigitais"
 create database circleci;
 \c circleci
 create table performances (build integer, file varchar, time float, container integer);
+create table builds (build_num integer, author_name varchar, branch varchar,
+  build_time_millis bigint, queued_at timestamp, start_time timestamp, subject text);
+
+alter table builds add unique (build_num);
 ```
 
 3. Choose recent builds to analyse
