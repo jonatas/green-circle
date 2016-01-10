@@ -58,7 +58,7 @@ ActiveRecord::Base.establish_connection(
   adapter:    'postgresql',
   host:       'localhost',
   database:   'circleci',
-  port:       '15432'
+  port:       '5432'
 )
 
 class Performance < ActiveRecord::Base
@@ -67,6 +67,7 @@ end
 
 
 def persist build, spec_results
+  Performance.where(build: build).delete_all
   spec_results.each_with_index do |results,container|
     results.each {|file,time| Performance.create build: build, container: container, file: file, time: time }
   end
@@ -75,7 +76,6 @@ end
 def fetch build
   containers = download_rspec_results_from build
   spec_results = parse_reports containers
-  Performance.where(build: build).delete_all
   persist build, spec_results
 end
 
@@ -139,7 +139,6 @@ def best_build
 end
 
 
-=begin
 (0..10).each do |i|
 	builds = CircleCi.http.get "/project/#{$username}/#{$repo}#{$token}&filter=successful&offset=#{20*i}&limit=20"
 	build_nums = builds
@@ -149,7 +148,7 @@ end
 p build_nums
 	build_nums.each{|build_num| fetch build_num }
 end
-=end
+
 require "pry"
 binding.pry
 
