@@ -63,6 +63,21 @@ ActiveRecord::Base.establish_connection(
 
 class Performance < ActiveRecord::Base
 
+ scope :time_per_file, -> { group(:file).average(:time) }
+ scope :build_time_per_container, -> {
+   h = {}
+   Performance.group(:build, :container).sum(:time).each do |(build_num, container), time|
+    h[build_num] ||= [] 
+    h[build_num][container]  = time
+  end
+  h
+ }
+ scope :stdev_per_file, -> {
+    select("file, stddev_samp(time) as time")
+    .group(:file)
+    .inject({}){|h,performance|h[performance.file] = performance.time;h}
+  }
+
   def self.save_parsed_results build, spec_results
     where(build: build).delete_all
     spec_results.each_with_index do |results,container|
@@ -111,19 +126,10 @@ end
 
 #fetch "32393"
 
-def time_per_file
-  @time_per_file ||= Performance.group(:file).average(:time)
-end
-
-def stdev_per_file 
-  @stdev_per_file ||= Performance
-    .select("file, stddev_samp(time) as time")
-    .group(:file)
-    .inject({}){|h,performance|h[performance.file] = performance.time;h}
-end
 
 def compare_build build_num
-  time_per_file.each do |file, avg_time|
+  stdev_per_file = Performance.stdev_per_file
+  Performance.time_per_file.each do |file, avg_time|
     next unless stdev_per_file[file]
     result = Performance.where(build: build_num, file: file).where("time - #{avg_time} < #{stdev_per_file[file] * 10}") #melhorou 10%
     if result.exists?
@@ -133,22 +139,13 @@ def compare_build build_num
 end
 
 
-def build_time_per_container
-  return @build_time_per_container if @build_time_per_container
-  @build_time_per_container = {}
-  Performance.group(:build, :container).sum(:time).each do |(build_num, container), time|
-    @build_time_per_container[build_num] ||= [] 
-    @build_time_per_container[build_num][container]  = time
-  end
-  @build_time_per_container
-end
 
 def worse_build
   max_time = nil
   worse_build = nil
-  build_time_per_container.each do |build, times|
-    next if times.length < 4
-    if max_time.nil? || times.max > max_time.max
+  Performance.build_time_per_container.each do |build, times|
+    next if times.length < 4 || times.nil? || times.empty? || times.max.nil?
+    if max_time.nil? || times.max > max_time.max 
       max_time = times
       worse_build = build
     end
@@ -159,7 +156,7 @@ end
 def best_build
   max_time = nil
   best_build = nil
-  build_time_per_container.each do |build, times|
+  Performance.build_time_per_container.each do |build, times|
     if max_time.nil? || times.max < max_time.max
       max_time = times
       best_build = build
