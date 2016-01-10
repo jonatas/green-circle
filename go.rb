@@ -63,7 +63,7 @@ ActiveRecord::Base.establish_connection(
 
 class Performance < ActiveRecord::Base
 
-  def self.persist build, spec_results
+  def self.save_parsed_results build, spec_results
     where(build: build).delete_all
     spec_results.each_with_index do |results,container|
       results.each {|file,time| create build: build, container: container, file: file, time: time }
@@ -73,7 +73,30 @@ end
 
 class Build < ActiveRecord::Base
 
+  scope :grouped, -> (by) { group(by).count.sort_by{|k,v|k} }
+  scope :in, -> (trunk, value) { where("extract(? from start_time) = ?", trunk, value) }
+
+  scope :per_hour, -> { grouped("extract(hour from start_time)") }
+  scope :per_dow, -> { grouped("extract(dow from start_time)") }
+  scope :per_year_month, -> { grouped("to_char(start_time, 'YYYY/MM')") }
+  scope :per_year_month_and_user, -> { grouped("to_char(start_time, 'YYYY/MM') || ' ' || author_name") }
+
+  scope :contributors, -> { select("author_name").distinct.pluck("author_name").compact.sort }
+  scope :total,  -> (field){ select(field).distinct.count }
+  scope :total_branches, -> { total("branch") }
+
+  scope :total_contributors, -> { 
+    where("not author_name is null")
+      .where("not author_name = 'capybot'")
+      .select("author_name").distinct }
+
+  scope :worse_waiting_time, 
+    -> { select("*, EXTRACT(EPOCH FROM (start_time - queued_at)) as waiting_time")
+         .order("EXTRACT(EPOCH FROM (start_time - queued_at)) DESC")
+         .map(&:attributes) }
+
   def self.save_from_json info
+    where(build_num: info["build_num"]).delete_all
     create info.slice("build_num", "author_name","queued_at","start_time", "build_time_millis","branch", "subject")
   end
 end
@@ -83,7 +106,7 @@ end
 def fetch build
   containers = download_rspec_results_from build
   spec_results = parse_reports containers
-  persist build, spec_results
+  Performance.save_parsed_results build, spec_results
 end
 
 #fetch "32393"
@@ -149,17 +172,25 @@ def fetch_successful_builds page=0, total_per_page=20
 	builds = CircleCi.http.get "/project/#{$username}/#{$repo}#{$token}&filter=successful&offset=#{page * total_per_page}&limit=#{total_per_page}"
 	builds
 		.body # ignoring master
-end
-
-def fetch_some_builds
-  build_nums = 
-    fetch_successful_builds
     .select{|e|e["status"] =~ /fixed|success/ && e["branch"] !="master"}
-    .map{|e|e["build_num"]}
-
-	build_nums.each{|build_num| fetch build_num }
 end
- 
+
+def fetch_some_builds page = 0
+  fetch_successful_builds(page)
+    .each do |build| 
+      print "."
+      Build.save_from_json build
+    end
+    #.each do |build| 
+    #  print ","
+    #  fetch build["build_num"]
+    #end
+end
+
+def r
+	load 'go.rb'
+end
+
 require "pry"
 binding.pry
 
