@@ -90,15 +90,22 @@ class Build < ActiveRecord::Base
 
   scope :grouped, -> (by) { group(by).count.sort_by{|k,v|k || ""} }
   scope :in, -> (trunk, value) { where("extract(? from start_time) = ?", trunk, value) }
+  scope :normalized, -> {
+    where("NOT author_name is null and NOT author_name = 'capybot' AND NOT author_name = ''")
+  }
 
+  scope :per_contributor, -> { normalized.grouped("author_name") }
   scope :per_hour, -> { grouped("extract(hour from start_time)") }
   scope :per_dow, -> { grouped("extract(dow from start_time)") }
-  scope :per_year_month, -> { grouped("to_char(start_time, 'YYYY/MM')") }
-  scope :per_year_month_and_user, -> { grouped("to_char(start_time, 'YYYY/MM') || ' ' || author_name") }
+  scope :per_year, -> { grouped("date_trunc('year', start_time)") }
+  scope :per_day, -> { group("date_trunc('day',start_time)") }
+  scope :per_year_month, -> { grouped("date_trunc('month', start_time)") }
+  scope :per_year_month_and_user, -> { group("date_trunc('month',start_time), author_name").count }
 
   scope :contributors, -> { select("author_name").distinct.pluck("author_name").compact.sort }
   scope :total,  -> (field){ select(field).distinct.count }
   scope :total_branches, -> { total("branch") }
+  scope :total_contributors, -> { normalized.total("author_name") }
 
   scope :top_contributors, -> { grouped("author_name").sort_by {|k,v|-v} }
   scope :top_branches, -> { grouped("branch").sort_by {|k,v|-v} }
@@ -108,10 +115,10 @@ class Build < ActiveRecord::Base
       .where("not author_name = 'capybot'")
       .select("author_name").distinct }
 
-  scope :worse_waiting_time, 
-    -> { select("*, EXTRACT(EPOCH FROM (start_time - queued_at)) as waiting_time")
-         .order("EXTRACT(EPOCH FROM (start_time - queued_at)) DESC")
-         .map(&:attributes) }
+  scope :include_waiting_time, -> { select("*, EXTRACT(EPOCH FROM (start_time - queued_at)) as waiting_time") }
+  scope :worse_waiting_time, -> {
+    include_waiting_time
+      .order("EXTRACT(EPOCH FROM (start_time - queued_at)) DESC") }
 
   def self.save_from_json info
     where(build_num: info["build_num"]).delete_all
@@ -191,7 +198,5 @@ def r
 	load 'go.rb'
 end
 
-require "pry"
-binding.pry
 
 
