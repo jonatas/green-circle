@@ -1,0 +1,38 @@
+<h1>Total of Green Builds: <%= Build.count %></h1>
+
+
+<h1>Usage</h1>
+<h2>Per hour of day</h2>
+<%= column_chart Build.per_hour %>
+
+<h2>Per day of week</h2>
+<%= column_chart Build.per_dow %>
+
+<h1>Growth <small>from <%= Build.order("start_time").first.start_time  %> to <%= Build.order("start_time").last.start_time  %></small></h1>
+
+<h2>Builds growth per year</h2>
+<%= column_chart Build.per_year, stacked: true %>
+
+<h2>Builds growth per year/month</h2>
+<%= column_chart Build.per_year_month, stacked: true %>
+
+<h2>Contributors per year</h2>
+<small>
+  Ignoring contributors with null names and capybot (<%= Build.count - Build.normalized.count %> builds)
+</small>
+<% (2013..Time.now.year).each do |year| %>
+<h3><%= year %></h3>
+  <%= pie_chart Build.normalized.in('year',year).per_contributor, title: year.to_s %>
+<% end %>
+
+<h1>Build time in minutes</h1>
+<%= area_chart Build.per_day.average("build_time_millis / 1000 / 60") %>
+
+<h1>Contributors growth over time</h1>
+<%= column_chart Build.normalized.total_contributors.per_year_month %>
+<!--p>
+Waiting Builds Average
+</p>
+
+<%= area_chart Build.where('start_time > queued_at').include_waiting_time.per_day.average(" EXTRACT(EPOCH FROM (start_time - queued_at)) / 60") %-->
+
